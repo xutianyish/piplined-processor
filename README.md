@@ -6,5 +6,8 @@ The pipelined processor has two instuction cache. One predicts the next instruct
 The other predicts whether the next instruction is a branch instruction. 
 
 ## Performance
-IPC:1.5
+IPC:1.5</br>
 Fmax:200MHz on cycloneV FPGA
+
+## Note
+Only part of the code is commited to prevent academic offence

@@ -8,6 +8,3 @@ The other predicts whether the next instruction is a branch instruction.
 ## Performance
 IPC:1.5</br>
 Fmax:200MHz on cycloneV FPGA
-
-## Note
-Only part of the code is commited to prevent academic offence

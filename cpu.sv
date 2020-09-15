@@ -12,20 +12,20 @@ module cpu(
 	output [7:0][15:0] o_tb_regs
 );
 	//detecter logic
-	logic [1:0] detect_rfread;
-	logic [1:0] detect_execute;
-	logic [15:0] execute_overwrite_data;
-	logic [15:0] rfread_overwrite_data;
-	logic [1:0] detect_ldst;
-	logic [15:0] ldst_overwrite_data;
+	logic [1:0] dt_rfread;
+	logic [1:0] dt_execute;
+	logic [15:0] execute_owd;
+	logic [15:0] rfread_owd;
+	logic [1:0] dt_ldst;
+	logic [15:0] ldst_owd;
 	
 	//fetch stage logic
-	logic [15:0] pc_jump_addr;
+	logic [5:0] pc_jump_addr;
 	logic fetch_valid;
 	logic stall_fetch;
 	
 	//rfread stage logic
-	logic [15:0] ir_rfread_stage;
+	logic [15:0] ir_rfread;
 	logic stall_rfread;
 	logic rfread_valid;
 	//regfile connections
@@ -43,37 +43,40 @@ module cpu(
 	
 	//execute stage
 	logic execute_valid;
-	logic [15:0] alu_result_in;
-	logic [15:0] ir_execute_stage;
-	logic flag_z;
-	logic flag_n;
+	logic [15:0] alu_in;
+	logic [15:0] ir_execute;
+	logic z;
+	logic n;
 	logic [15:0] mem_reg_out;
-	logic [15:0] alu_result_out;	
+	logic [15:0] alu_out;	
 	
-	forward_detect seq_detect(
+	//pc_controller logic
+	logic prediction_fastcall;
+	
+	dep_instr _dep_instr(
 		.clk(clk),
 		.reset(reset),
 		.i_fetch_valid(fetch_valid),
 		.i_rfread_valid(rfread_valid),
 		.i_execute_valid(execute_valid),
 		.i_pc_rddata(i_pc_rddata),
-		.i_ir_rfread_stage(ir_rfread_stage),
-		.i_ir_execute_stage(ir_execute_stage),
+		.i_ir_rfread(ir_rfread),
+		.i_ir_execute(ir_execute),
 		.i_rf_dataw(rf_dataw),
-		.i_alu_result_in(alu_result_in),
-		.o_detect_rfread(detect_rfread),
-		.o_detect_execute(detect_execute),
-		.o_execute_overwrite_data(execute_overwrite_data),
-		.o_rfread_overwrite_data(rfread_overwrite_data),
-		.o_detect_ldst(detect_ldst),
-		.o_ldst_overwrite_data(ldst_overwrite_data)
+		.i_alu_in(alu_in),
+		.o_dt_rfread(dt_rfread),
+		.o_dt_execute(dt_execute),
+		.o_execute_owd(execute_owd),
+		.o_rfread_owd(rfread_owd),
+		.o_dt_ldst(dt_ldst),
+		.o_ldst_owd(ldst_owd)
 	);
 	
 	//fetch stage
-	stage_fetch u_stage_fetch(
+	fetch _fetch(
 		.clk(clk),
 		.reset(reset),
-		.i_pc_jump_addr(pc_jump_addr),
+		.i_pc_addr(pc_jump_addr),
 		.i_stall_fetch(stall_fetch),
 		.o_pc_rd(o_pc_rd),
 		.o_pc_addr(o_pc_addr),
@@ -92,10 +95,12 @@ module cpu(
 		.i_dataw(rf_dataw),
 		.o_data1(rf_o_data1),
 		.o_data2(rf_o_data2),
-		.o_regs(o_tb_regs)
+		.o_regs(o_tb_regs),
+		.i_fastcall(prediction_fastcall),
+		.i_fastcallret_addr(o_pc_addr[6:1]+2'd2)
 	);
 	
-	stage_rfread u_stage_rf_read(
+	rfread _rfread(
 		.clk(clk),
 		.reset(reset), 
 		.i_pc_addr(o_pc_addr),
@@ -103,72 +108,73 @@ module cpu(
 		.mem_data(i_pc_rddata),
 		.i_rf_data1(rf_o_data1),
 		.i_rf_data2(rf_o_data2),
-		.i_rfread_overwrite_data(rfread_overwrite_data),
-		.i_detect_rfread(detect_rfread),
+		.i_rfread_owd(rfread_owd),
+		.i_dt_rfread(dt_rfread),
 		.stall_rfread(stall_rfread),
-		.i_detect_ldst(detect_ldst),
-		.i_ldst_overwrite_data(ldst_overwrite_data),
+		.i_dt_ldst(dt_ldst),
+		.i_ldst_owd(ldst_owd),
 		.o_ldst_addr(o_ldst_addr),
 		.o_ldst_rd(o_ldst_rd),
 		.o_ldst_wr(o_ldst_wr),
 		.o_ldst_wrdata(o_ldst_wrdata),
 		.o_opa_data(opa_o_data),
 		.o_opb_data(opb_o_data),
-		.o_ir_rfread_stage(ir_rfread_stage),
+		.o_ir_rfread(ir_rfread),
 		.o_valid(rfread_valid)
 	);
 	
    //execute stage
-	stage_execute u_stage_execute(
+	execute _execute(
 		.clk(clk),
 		.reset(reset),
 		.i_valid(rfread_valid),
 		.i_opa_data(opa_o_data),
 		.i_opb_data(opb_o_data),
-		.i_ir_rfread_stage(ir_rfread_stage),
-		.i_execute_overwrite_data(execute_overwrite_data),
-		.i_detect_execute(detect_execute),
-		.o_alu_result_in(alu_result_in),
+		.i_ir_rfread(ir_rfread),
+		.i_execute_owd(execute_owd),
+		.i_dt_execute(dt_execute),
+		.o_alu_in(alu_in),
 		.mem_rddata(i_ldst_rddata),
-		.o_flag_z(flag_z),
-		.o_flag_n(flag_n),
+		.o_z(z),
+		.o_n(n),
 		.o_valid(execute_valid),
-		.o_ir_execute_stage(ir_execute_stage),
+		.o_ir_execute(ir_execute),
 		.o_mem_reg_out(mem_reg_out),
-		.o_alu_result_out(alu_result_out)
+		.o_alu_out(alu_out)
 	);
 	
 	//writeback stage
-	stage_rfwrite u_stage_rfwrite(
+	rfwrite _rfwrite(
 		.i_valid(execute_valid),
-		.i_ir(ir_execute_stage),
-		.i_alu_result(alu_result_out),
+		.i_ir(ir_execute),
+		.i_alu_result(alu_out),
 		.i_mem_data(mem_reg_out),
 		.o_rf_write_en(rfwrite_en),
 		.o_mvhi(rfwrite_mvhi),
 		.o_rf_regw(rf_regw),
 		.o_rf_dataw(rf_dataw)
 	);
-
-	pc_controller u_pc_controller(
+	
+	//control pc_addr
+	pc_addr_ctrl _pc_addr_ctrl(
 		.clk(clk),
 		.reset(reset),
-		.i_pc_fetch_stage(o_pc_addr),
-		.i_ir_rfread_stage(ir_rfread_stage),
-		.i_ir_execute_stage(ir_execute_stage),
-		.i_rf_o_data1(rf_o_data1),
-		.i_alu_result_out(alu_result_out),
+		.i_pc_fetch(o_pc_addr[6:1]),
+		.i_opa_out(alu_in[6:1]),
+		.i_ir_rfread(ir_rfread),
+		.i_ir_execute(ir_execute),
+		.i_rf_o_data1(rf_o_data1[6:1]),
+		.i_alu_result_out(alu_out[6:1]),
 		.i_fetch_valid(fetch_valid),
 		.i_rfread_valid(rfread_valid),
 		.mem_data(i_pc_rddata),
-		.z(flag_z),
-		.n(flag_n),
-		.o_pc_jump_addr(pc_jump_addr),
+		.z(z),
+		.n(n),
+		.o_pc_addr(pc_jump_addr),
 		.stall_fetch(stall_fetch),
-		.stall_rfread(stall_rfread)
+		.stall_rfread(stall_rfread),
+		.o_prediction_fastcall(prediction_fastcall)
 	);
-	
-	
 
 endmodule
     
